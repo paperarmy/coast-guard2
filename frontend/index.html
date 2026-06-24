@@ -180,6 +180,9 @@
                 <span id="cal-month-label"></span>
                 <button onclick="calNav(1)">▶</button>
                 <button onclick="calGoToday()" class="cal-today-btn">오늘</button>
+                <input type="date" id="cal-date-input" class="cal-date-input"
+                       min="2023-03-01" onchange="calGoToDate(this.value)"
+                       title="날짜를 직접 입력해 이동">
               </div>
             </div>
             <div class="cal-grid-wrap">

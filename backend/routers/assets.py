@@ -30,8 +30,11 @@ def _load():
 
 
 def _save(data):
-    with open(ASSETS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    try:
+        with open(ASSETS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except OSError:
+        raise OSError("read-only")
 
 
 class AssetUpdate(BaseModel):
@@ -59,5 +62,8 @@ def update_asset(asset_id: str, body: AssetUpdate):
     if body.lon is not None: asset["lon"] = body.lon
     if body.active is not None: asset["active"] = body.active
     if body.label is not None: asset["label"] = body.label
-    _save(assets)
+    try:
+        _save(assets)
+    except OSError:
+        raise HTTPException(status_code=503, detail="자산 위치 편집은 Phase 2(DB 연동) 이후 지원됩니다.")
     return asset

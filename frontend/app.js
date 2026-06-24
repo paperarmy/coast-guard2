@@ -449,6 +449,14 @@ const calState = {
 };
 
 async function initCalendar() {
+  // 날짜 입력 범위 설정
+  const inp = $("cal-date-input");
+  if (inp) {
+    const maxD = new Date();
+    maxD.setDate(maxD.getDate() + 30);
+    inp.max = maxD.toISOString().slice(0, 10);
+  }
+
   // 실측 전체 범위 로드
   const end = new Date(); end.setDate(end.getDate() - 1);
   const endStr = end.toISOString().slice(0, 10);
@@ -482,6 +490,15 @@ function calGoToday() {
   calState.year  = now.getFullYear();
   calState.month = now.getMonth() + 1;
   renderCalMonth();
+}
+
+function calGoToDate(dateStr) {
+  if (!dateStr) return;
+  const [y, m] = dateStr.split("-").map(Number);
+  calState.year  = y;
+  calState.month = m;
+  renderCalMonth();
+  setTimeout(() => selectCalDay(dateStr), 50);
 }
 
 function renderCalMonth() {
