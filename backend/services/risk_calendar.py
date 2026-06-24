@@ -183,6 +183,25 @@ def get_forecast(days: int = 30) -> list[dict]:
     return result
 
 
+def get_env_day_forecast(target: date) -> dict:
+    """미래 날짜의 환경 위험 지수 요약 — 격자별 CVI 예측에 사용"""
+    hours = _forecast_hourly(target)
+    triple_h = sum(1 for h in hours if h["triple_risk"])
+    high_tide_h = sum(1 for h in hours if h["is_high_tide"])
+    fog_h = sum(1 for h in hours if h["is_fog"])
+
+    env_ratio = (triple_h / 6.0) * 0.60 + (high_tide_h / 12.0) * 0.25 + (fog_h / 14.0) * 0.15
+    env_multiplier = round(0.75 + min(env_ratio, 1.0) * 0.50, 4)
+
+    return {
+        "triple_hours": triple_h,
+        "high_tide_hours": high_tide_h,
+        "fog_hours": fog_h,
+        "env_ratio": round(env_ratio, 4),
+        "env_multiplier": env_multiplier,
+    }
+
+
 def _predict_tide_day(target: date) -> list[int]:
     """군산항 조석 수식 근사 (반일주조 12.42h + 진폭 395cm + 기준 290cm)"""
     # 기준점: 2023-03-01 00:00 = 319cm (실측 첫 값)

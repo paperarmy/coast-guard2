@@ -6,6 +6,7 @@ const API = window.location.hostname === "localhost"
 /* ===================== 전역 상태 ===================== */
 let state = {
   grids: [],
+  gridsLive: [],
   filteredGrids: [],
   environment: null,
   assets: [],
@@ -16,6 +17,7 @@ let state = {
   gridLayers: {},
   tsChart: null,
   currentView: "dashboard",
+  forecastMode: false,
 };
 
 /* ===================== 유틸 ===================== */
@@ -32,6 +34,7 @@ window.onload = async () => {
   startClock();
   initMap();
   initAssetMap();
+  initDashForecastPicker();
   await loadAll();
   setInterval(loadEnvironment, 60000); // 1분마다 환경 갱신
 };
@@ -74,6 +77,7 @@ async function loadGrids() {
   const data = await fetchAPI("/grids?limit=210");
   if (!data) return;
   state.grids = data.grids;
+  state.gridsLive = [...data.grids];
   state.filteredGrids = [...state.grids];
   renderMapGrids();
   renderPriorityList();
@@ -144,9 +148,13 @@ function renderMapGrids() {
       radius, color, fillColor: color, fillOpacity: 0.75, weight: 1.5
     });
 
+    const deltaHtml = state.forecastMode && g.cvi_base !== undefined
+      ? `<div class="popup-row">기본 CVI: <span>${g.cvi_base}</span> <span style="color:${g.cvi_delta > 0 ? '#ef4444' : '#22c55e'}">${g.cvi_delta > 0 ? '+' : ''}${g.cvi_delta}</span></div>`
+      : "";
     marker.bindPopup(`
-      <div class="popup-title">${g.grid_id} | ${g.region}</div>
+      <div class="popup-title">${g.grid_id} | ${g.region}${state.forecastMode ? ' <span style="color:#f97316;font-size:10px">[예측]</span>' : ''}</div>
       <div class="popup-row">CVI: <span style="color:${g.cvi_color}">${g.cvi} (${g.cvi_level})</span></div>
+      ${deltaHtml}
       <div class="popup-row">LISA: <span>${g.lisa}</span></div>
       <div class="popup-row">유형: <span>${g.grid_type}</span></div>
       <div class="popup-row">권고: <span>${g.recommended_actions[0]}</span></div>
@@ -499,6 +507,61 @@ function calGoToDate(dateStr) {
   calState.month = m;
   renderCalMonth();
   setTimeout(() => selectCalDay(dateStr), 50);
+}
+
+/* ===================== 격자 취약도 예측 모드 ===================== */
+function initDashForecastPicker() {
+  const inp = $("dash-forecast-date");
+  if (!inp) return;
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  inp.min = tomorrow.toISOString().slice(0, 10);
+  const maxD = new Date();
+  maxD.setDate(maxD.getDate() + 30);
+  inp.max = maxD.toISOString().slice(0, 10);
+}
+
+async function loadForecastGrids(dateStr) {
+  if (!dateStr) return;
+  const data = await fetchAPI(`/grids/forecast?date=${dateStr}`);
+  if (!data) return;
+
+  state.forecastMode = true;
+  state.grids = data.grids;
+  state.filteredGrids = [...data.grids];
+
+  renderMapGrids();
+  renderPriorityList();
+  renderStatsGrid();
+  renderGridTable();
+
+  const env = data.env;
+  const badge = $("dash-forecast-badge");
+  badge.textContent = `예측 모드 — ${dateStr} (D+${data.days_ahead}, 신뢰도 ${data.confidence_pct}% | 만조 ${env.high_tide_hours}h · 안개 ${env.fog_hours}h · 3중취약 ${env.triple_hours}h)`;
+  badge.style.display = "inline-block";
+  $("dash-forecast-reset").style.display = "inline-block";
+
+  const banner = $("alert-banner");
+  banner.className = "alert-banner alert-forecast";
+  $("alert-icon").textContent = "📅";
+  $("alert-text").textContent = `예측 모드: ${dateStr} 격자 CVI 예측 중 (신뢰도 ${data.confidence_pct}%)`;
+}
+
+function resetToLive() {
+  state.forecastMode = false;
+  state.grids = [...state.gridsLive];
+  state.filteredGrids = [...state.gridsLive];
+
+  renderMapGrids();
+  renderPriorityList();
+  renderStatsGrid();
+  renderGridTable();
+
+  $("dash-forecast-badge").style.display = "none";
+  $("dash-forecast-reset").style.display = "none";
+  $("dash-forecast-date").value = "";
+
+  loadEnvironment();
 }
 
 function renderCalMonth() {

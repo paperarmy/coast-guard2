@@ -65,6 +65,16 @@
     <main class="main-content">
       <!-- 대시보드 뷰 -->
       <div id="view-dashboard" class="view active">
+        <!-- 격자 취약도 예측 모드 컨트롤 바 -->
+        <div class="forecast-ctrl-bar">
+          <span class="forecast-ctrl-label">📅 격자 취약도 예측</span>
+          <input type="date" id="dash-forecast-date" class="cal-date-input"
+                 onchange="loadForecastGrids(this.value)"
+                 title="미래 날짜 선택 (최대 30일)">
+          <button id="dash-forecast-reset" class="cal-today-btn" style="display:none"
+                  onclick="resetToLive()">← 현재</button>
+          <span id="dash-forecast-badge" class="forecast-mode-badge" style="display:none"></span>
+        </div>
         <div class="dashboard-grid">
           <!-- 지도 -->
           <div class="card map-card">
