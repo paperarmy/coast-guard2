@@ -1,2 +1,8 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# 모든 텍스트 파일을 LF로 강제 (Vercel/Linux 배포 환경 기준)
+* text=auto eol=lf
+
+# 바이너리 파일 — 줄바꿈 변환 없음
+*.png binary
+*.jpg binary
+*.ico binary
+*.csv binary

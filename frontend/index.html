@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CGIP — 해안경계 취약구간 모니터링</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 상단 헤더 -->
+  <header id="header">
+    <div class="header-left">
+      <span class="logo">⚓ CGIP</span>
+      <span class="subtitle">해안경계 취약구간 모니터링</span>
+    </div>
+    <div class="header-center">
+      <div id="alert-banner" class="alert-banner alert-normal">
+        <span id="alert-icon">●</span>
+        <span id="alert-text">시스템 초기화 중...</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <span id="clock" class="clock"></span>
+      <span id="connection-status" class="conn-dot"></span>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <!-- 사이드바 -->
+    <nav class="sidebar">
+      <ul class="nav-menu">
+        <li class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
+          <span class="nav-icon">📊</span><span>대시보드</span>
+        </li>
+        <li class="nav-item" data-view="grids" onclick="switchView('grids')">
+          <span class="nav-icon">🗺️</span><span>격자 분석</span>
+        </li>
+        <li class="nav-item" data-view="assets" onclick="switchView('assets')">
+          <span class="nav-icon">🎯</span><span>감시 자산</span>
+        </li>
+        <li class="nav-item" data-view="timeseries" onclick="switchView('timeseries')">
+          <span class="nav-icon">📈</span><span>이상탐지</span>
+        </li>
+        <li class="nav-item" data-view="calendar" onclick="switchView('calendar')">
+          <span class="nav-icon">📅</span><span>위험 캘린더</span>
+        </li>
+      </ul>
+      <!-- 환경 카드 -->
+      <div class="env-panel">
+        <div class="env-title">현재 환경</div>
+        <div class="env-row"><span>시간대</span><span id="env-period" class="badge">--</span></div>
+        <div class="env-row"><span>조위</span><span id="env-tide">-- m</span></div>
+        <div class="env-row"><span>시정</span><span id="env-vis">-- km</span></div>
+        <div class="env-row"><span>풍속</span><span id="env-wind">-- m/s</span></div>
+        <div class="env-divider"></div>
+        <div class="triple-risk-box" id="triple-risk-box">
+          <div class="triple-title">3중 취약 조건</div>
+          <div class="triple-chips" id="triple-chips"></div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- 메인 콘텐츠 -->
+    <main class="main-content">
+      <!-- 대시보드 뷰 -->
+      <div id="view-dashboard" class="view active">
+        <div class="dashboard-grid">
+          <!-- 지도 -->
+          <div class="card map-card">
+            <div class="card-header">
+              <span>CVI 취약구간 지도</span>
+              <div class="map-legend">
+                <span class="legend-item"><span class="dot" style="background:#16a34a"></span>정상</span>
+                <span class="legend-item"><span class="dot" style="background:#ca8a04"></span>주의</span>
+                <span class="legend-item"><span class="dot" style="background:#ea580c"></span>경계</span>
+                <span class="legend-item"><span class="dot" style="background:#dc2626"></span>위험</span>
+              </div>
+            </div>
+            <div id="map"></div>
+          </div>
+
+          <!-- 오늘의 경계 중점 -->
+          <div class="card priority-card">
+            <div class="card-header"><span>오늘의 경계 중점</span>
+              <button class="print-btn" onclick="printPriority()">🖨️ 출력</button>
+            </div>
+            <div id="priority-list" class="priority-list"></div>
+          </div>
+
+          <!-- 통계 요약 -->
+          <div class="card stats-card">
+            <div class="card-header"><span>격자 현황</span></div>
+            <div class="stats-grid" id="stats-grid"></div>
+          </div>
+
+          <!-- 7일 예측 -->
+          <div class="card forecast-card">
+            <div class="card-header"><span>7일 경보 예측</span></div>
+            <div id="forecast-bar" class="forecast-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 격자 분석 뷰 -->
+      <div id="view-grids" class="view">
+        <div class="card full-card">
+          <div class="card-header">
+            <span>전체 격자 분석 (210개)</span>
+            <div class="filter-row">
+              <select id="filter-region" onchange="filterGrids()">
+                <option value="">전체 지역</option>
+                <option value="군산">군산</option>
+                <option value="부안">부안</option>
+                <option value="고창">고창</option>
+              </select>
+              <select id="filter-lisa" onchange="filterGrids()">
+                <option value="">전체 LISA</option>
+                <option value="HH">HH (고위험)</option>
+                <option value="LL">LL (저위험)</option>
+                <option value="HL">HL</option>
+                <option value="LH">LH</option>
+              </select>
+              <select id="filter-level" onchange="filterGrids()">
+                <option value="">전체 등급</option>
+                <option value="위험">위험</option>
+                <option value="경계">경계</option>
+                <option value="주의">주의</option>
+                <option value="정상">정상</option>
+              </select>
+              <button onclick="exportCSV()" class="export-btn">📥 CSV</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="grid-table" class="data-table">
+              <thead>
+                <tr>
+                  <th onclick="sortTable('rank')">순위</th>
+                  <th>격자ID</th>
+                  <th onclick="sortTable('region')">지역</th>
+                  <th onclick="sortTable('cvi')">CVI ↕</th>
+                  <th>등급</th>
+                  <th>LISA</th>
+                  <th>유형</th>
+                  <th>CCTV</th>
+                  <th>드론</th>
+                  <th>TOD</th>
+                  <th>권고 조치</th>
+                </tr>
+              </thead>
+              <tbody id="grid-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 감시 자산 뷰 -->
+      <div id="view-assets" class="view">
+        <div class="dashboard-grid">
+          <div class="card map-card">
+            <div class="card-header"><span>감시 자산 배치 현황</span></div>
+            <div id="asset-map"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span>자산 목록</span></div>
+            <div id="asset-list" class="asset-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 위험 캘린더 뷰 -->
+      <div id="view-calendar" class="view">
+        <div class="cal-layout">
+          <!-- 좌: 히트맵 캘린더 -->
+          <div class="card cal-main-card">
+            <div class="card-header">
+              <span>위험 캘린더 <span class="cal-badge-past">■ 실측</span> <span class="cal-badge-forecast">■ 예측</span></span>
+              <div class="cal-nav">
+                <button onclick="calNav(-1)">◀</button>
+                <span id="cal-month-label"></span>
+                <button onclick="calNav(1)">▶</button>
+                <button onclick="calGoToday()" class="cal-today-btn">오늘</button>
+              </div>
+            </div>
+            <div class="cal-grid-wrap">
+              <div class="cal-dow-row">
+                <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+              </div>
+              <div id="cal-grid" class="cal-grid"></div>
+            </div>
+            <!-- 범례 -->
+            <div class="cal-legend">
+              <span>낮음</span>
+              <div class="cal-legend-bar"></div>
+              <span>높음</span>
+              <span class="cal-legend-sep">|</span>
+              <span class="cal-dot-pred"></span><span>예측</span>
+            </div>
+          </div>
+
+          <!-- 우: 선택일 상세 -->
+          <div class="card cal-detail-card">
+            <div class="card-header">
+              <span id="cal-detail-title">날짜를 선택하세요</span>
+              <span id="cal-source-badge" class="cal-src-badge"></span>
+            </div>
+            <div id="cal-detail-body">
+              <div class="cal-placeholder">← 날짜를 클릭하면<br>시간별 위험 분석을 표시합니다</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 하단: 전체 시계열 트렌드 -->
+        <div class="card full-card" style="margin-top:12px">
+          <div class="card-header">
+            <span>일별 위험 점수 추이 (실측 + 예측 30일)</span>
+            <div style="display:flex;gap:8px;align-items:center;font-size:11px;color:var(--text2)">
+              <span>■ <span style="color:#38bdf8">실측</span></span>
+              <span>■ <span style="color:#f97316">예측</span></span>
+              <span>— <span style="color:#ef4444">3중 취약</span></span>
+            </div>
+          </div>
+          <canvas id="cal-trend-chart" height="60"></canvas>
+        </div>
+      </div>
+
+      <!-- 이상탐지 뷰 -->
+      <div id="view-timeseries" class="view">
+        <div class="card full-card">
+          <div class="card-header">
+            <span>야간 이상 지수 시계열 (STL 분해)</span>
+            <select id="ts-grid-select" onchange="loadTimeseries()">
+              <option value="">격자 선택...</option>
+            </select>
+          </div>
+          <canvas id="ts-chart" height="80"></canvas>
+          <div id="ts-info" class="ts-info"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 격자 상세 팝업 -->
+    <div id="grid-detail-panel" class="detail-panel hidden">
+      <div class="detail-header">
+        <span id="detail-title">격자 상세</span>
+        <button onclick="closeDetail()">✕</button>
+      </div>
+      <div id="detail-body" class="detail-body"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
