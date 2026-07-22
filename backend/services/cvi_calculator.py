@@ -1,13 +1,10 @@
 """
-실 데이터 기반 CVI 산출기
-- coast_proximity: 격자 경도 기반 (실 데이터) ✅
-- cctv_gap:        cctv_jeonbuk.csv 기반 (data.go.kr API 수집) ✅
-- old_building:    population_grid.csv 인구밀도 proxy (실 데이터) ✅
-- vessel_density:  MDIS 해수면-어선현황 (실 데이터) ✅
-- night_anomaly:   지역별 위험 편향 추정치 (Phase 2 STL 교체 예정)
-
-grid 위치/LISA/자산은 dummy_grids.py(seed=42)와 동일 RNG 순서 유지.
-CVI 범위: 더미와 동일한 지역별 분포 (부안 0.5~1.0, 고창 0.1~0.6)
+실 데이터 기반 CVI 산출기 (5개 SHAP 인자 전부 실 데이터)
+- coast_proximity: 격자 경도 기반
+- cctv_gap:        data.go.kr CCTV 13,865건 → processed/cctv_grid_counts.csv
+- old_building:    SGIS 인구밀도 proxy → processed/population_grid.csv
+- vessel_density:  MDIS 어선현황 → processed/vessel_summary.csv
+- night_anomaly:   STL 분해 918일 → processed/night_anomaly_monthly.csv
 """
 import random
 import math
@@ -61,10 +58,7 @@ def _old_building_from_pop(pop_density: float) -> float:
 
 @lru_cache(maxsize=1)
 def _build_grids() -> list[dict]:
-    """
-    seed=42 고정 → dummy_grids.py와 동일한 격자 위치/LISA/자산 보장.
-    CVI 구조: 더미와 동일한 base_cvi * coast_adj 방식 + 실 데이터 보정.
-    """
+    """seed=42 고정 — 격자 위치/LISA/자산 일관성 보장."""
     rng = random.Random(42)
     cctv_available = has_cctv_data()
     grids = []
@@ -202,7 +196,7 @@ def _build_grids() -> list[dict]:
     return grids
 
 
-# ── 공개 인터페이스 (dummy_grids.py와 동일 시그니처) ─────────────────
+# ── 공개 인터페이스 ─────────────────────────────────────────────────
 
 def get_all_grids() -> list[dict]:
     return _build_grids()

@@ -1,6 +1,14 @@
 from fastapi import APIRouter
-from data.dummy_environment import get_current_environment, get_7day_forecast
-from data.dummy_grids import get_top_grids
+
+try:
+    from services.environment_service import get_current_environment, get_7day_forecast
+except Exception:
+    from data.dummy_environment import get_current_environment, get_7day_forecast
+
+try:
+    from services.cvi_calculator import get_top_grids
+except Exception:
+    from data.dummy_grids import get_top_grids
 
 router = APIRouter()
 
