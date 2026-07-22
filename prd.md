@@ -1,6 +1,6 @@
 # PRD: CoastGuard Intelligence Platform (CGIP)
 **해안경계 취약구간 실시간 모니터링 웹 시스템**
-버전: 0.3 | 최종 수정: 2026-06-24
+버전: 0.4 | 최종 수정: 2026-07-22
 
 ---
 
@@ -32,6 +32,7 @@
 | F-02 | 3중 취약일 경보 배너 (야간/만조/안개) | Critical | ✅ 완료 |
 | F-03 | 실시간 환경 패널 (기상·조위·시간대) | High | ✅ 완료 (더미) |
 | F-04 | 오늘의 경계 중점 카드 + 인쇄 | High | ✅ 완료 |
+| F-30 | 격자별 미래 CVI 예측 모드 (대시보드 내, 날짜 선택 → 전체 격자 예측 CVI 교체) | High | ✅ 완료 |
 
 ### 3.2 격자 분석 (F-05 ~ F-07)
 
@@ -72,11 +73,11 @@
 
 | ID | 기능 | 우선순위 | 상태 |
 |----|------|---------|------|
-| F-20 | `vercel.json` — 라우팅 구성 (프론트/백엔드 분리) | Critical | 🔲 미구현 |
-| F-21 | FastAPI → Vercel Serverless Function 변환 | Critical | 🔲 미구현 |
-| F-22 | API URL 환경변수화 (`VITE_API_URL` or `window.ENV`) | Critical | 🔲 미구현 |
-| F-23 | CORS 도메인 확장 (Vercel 배포 URL 추가) | High | 🔲 미구현 |
-| F-24 | `processed/` CSV git 포함 (서버리스 접근용) | High | 🔲 미구현 |
+| F-20 | `vercel.json` — 라우팅 구성 (프론트/백엔드 분리) | Critical | ✅ 완료 |
+| F-21 | FastAPI → Vercel Serverless Function 변환 | Critical | ✅ 완료 |
+| F-22 | API URL 환경 감지 분기 (`localhost` 판별 → `/api` 상대경로) | Critical | ✅ 완료 |
+| F-23 | CORS 도메인 확장 (`allow_origin_regex` → `*.vercel.app` 전체) | High | ✅ 완료 |
+| F-24 | `processed/` CSV git 포함 (서버리스 접근용) | High | ✅ 완료 |
 
 ### 3.7 고도화 (F-25 ~ F-29)
 
@@ -101,45 +102,51 @@
 
 ---
 
-### Phase 1 — Vercel 배포 + 실 데이터 연동 완성 🔲 목표 (현재)
+### Phase 1 — Vercel 배포 + 실 데이터 연동 완성 🔄 진행 중 (2026-07-22 기준 80%)
 
 Phase 1의 목표는 **외부에서 접근 가능한 실 서비스 URL 확보**다.  
 로컬 환경 의존성을 완전히 제거하고 Vercel에서 프론트·백엔드를 모두 서빙한다.
 
-#### 1-A. Vercel 배포 환경 구성 (선행 작업)
+#### 1-A. Vercel 배포 환경 구성 ✅ 완료 (2026-06-24)
 
-| 항목 | 내용 |
-|------|------|
-| `vercel.json` 작성 | 프론트엔드(`frontend/`) 정적 서빙 + 백엔드(`/api/*`) 서버리스 라우팅 |
-| `api/` 진입점 생성 | Vercel Python 런타임용 `api/index.py` (FastAPI ASGI 래퍼) |
-| API URL 환경변수화 | `app.js`의 `API` 상수를 `window.API_BASE_URL` 또는 빌드 시 환경변수로 분리 |
-| CORS 업데이트 | `main.py` CORS에 `https://*.vercel.app` 추가 |
-| `processed/` CSV git 포함 | `.gitignore`에서 `backend/data/processed/` 제외 → 서버리스 함수 접근 허용 |
-| `.env.example` 작성 | `DATA_GO_KR_KEY`, `VERCEL_URL` 등 환경변수 목록 문서화 |
+| 항목 | 내용 | 상태 |
+|------|------|------|
+| `vercel.json` 작성 | 프론트엔드(`frontend/`) 정적 서빙 + 백엔드(`/api/*`) 서버리스 라우팅 | ✅ |
+| `api/` 진입점 생성 | Vercel Python 런타임용 `api/index.py` (FastAPI ASGI 래퍼) | ✅ |
+| API URL 환경 감지 | `app.js` `API` 상수 — `localhost` 판별 → 로컬: `http://localhost:8000/api`, 배포: `/api` | ✅ |
+| CORS 업데이트 | `main.py` `allow_origin_regex` → `*.vercel.app` 전체 허용 | ✅ |
+| `processed/` CSV git 포함 | `.gitignore`에서 `backend/data/processed/` 제외 → 서버리스 함수 접근 허용 | ✅ |
+| `.env.example` 작성 | `DATA_GO_KR_KEY`, `VERCEL_URL` 등 환경변수 목록 문서화 | ✅ |
+| `.gitattributes` CRLF 정규화 | `eol=lf` 강제 (Vercel Linux 환경 기준) | ✅ |
+| `PUT /api/assets` 503 처리 | Vercel 파일 쓰기 불가 → OSError 캐치 후 HTTP 503 반환 | ✅ |
 
 > **주의**: `assets.json`은 Vercel 서버리스 환경에서 파일 쓰기가 불가하므로 PUT `/api/assets` 기능은 Phase 2에서 DB로 이전한다. Phase 1에서는 읽기 전용으로 동작.
 
-#### 1-B. 실 데이터 연동 완성
+#### 1-B. 실 데이터 연동 완성 🔄 진행 중
 
-| 항목 | 파일 | 우선순위 |
-|------|------|---------|
-| 격자별 CCTV 수 매핑 | `services/cctv_loader.py` | High |
-| 실 CVI 재산출 (SHAP) | `services/cvi_calculator.py` | Critical |
-| 환경 데이터 실 연동 | `routers/environment.py` → `tide_hourly.csv` 최신 행 | Medium |
+| 항목 | 파일 | 우선순위 | 상태 |
+|------|------|---------|------|
+| 실 CVI 재산출 (SHAP 가중치) | `services/cvi_calculator.py` | Critical | 🔲 |
+| 격자별 CCTV 수 매핑 | `services/cctv_loader.py` ← `cctv_jeonbuk.csv` | High | 🔲 |
+| 격자별 고령비율·인구밀도 연동 | `services/cvi_calculator.py` ← `population_grid.csv` | High | 🔲 |
+| 격자별 선박 밀도 | `services/vessel_loader.py` ← MDIS 어업총조사 | High | 🔲 |
+| 환경 데이터 실 연동 | `routers/environment.py` → `tide_hourly.csv` 최신 행 | Medium | 🔲 |
 
 #### 1-C. 완료 기준 (Definition of Done)
 
-- [ ] `https://{프로젝트}.vercel.app` 에서 대시보드 정상 로드
-- [ ] `/api/grids`, `/api/calendar/stats` 등 핵심 API 응답 1초 이내
-- [ ] 더미 CVI가 아닌 실 데이터 기반 격자 점수 표시
-- [ ] HTTPS 환경에서 CORS 오류 없음
+- [x] `https://{프로젝트}.vercel.app` 에서 대시보드 정상 로드
+- [x] `/api/grids`, `/api/calendar/stats` 등 핵심 API 응답 1초 이내
+- [x] HTTPS 환경에서 CORS 오류 없음
+- [x] 격자별 미래 CVI 예측 모드 (`GET /api/grids/forecast?date=`) — 대시보드에서 날짜 선택
+- [ ] 더미 CVI가 아닌 실 데이터 기반 격자 점수 표시 ← **주요 잔여 항목**
+- [ ] `vessel_density` SHAP 인자 — MDIS 어업총조사 실 데이터 적용
 
 ---
 
 ### Phase 2 — 자동화·고도화 (목표: Phase 1 완료 후 4주)
 - **Vercel Cron Jobs**: 기상(1h) / 조위(1h) 갱신 (`/api/cron/refresh`)
 - **DB 도입**: Vercel Postgres 또는 Supabase → `assets.json` 파일 의존성 제거, 자산 위치 편집 복원
-- **STL 시계열 이상탐지** 실 데이터 적용
+- **STL 시계열 이상탐지 고도화**: `night_anomaly_index` 실 모델 교체 (데이터 소스 Phase 2 검토)
 - **자산 위치** 지도에서 드래그 편집 UI
 - **주간 리포트** 자동 생성 (PDF)
 - 환경 데이터 누락 시 캐시 fallback
@@ -194,15 +201,15 @@ Phase 1의 목표는 **외부에서 접근 가능한 실 서비스 URL 확보**�
 
 ## 7. 데이터 수집 현황
 
-| 데이터 | 출처 | 수집 방식 | 상태 | 파일 |
-|--------|------|----------|------|------|
-| 기상 관측 (군산, 2023) | 기상청 ASOS | API | ✅ | `data/weather_gunsan_2023.csv` |
-| 기상 관측 (군산, 2024~25) | 기상청 ASOS | API | ✅ | `data/weather_gunsan_2023_2025.csv` |
-| 전북 CCTV 위치 | 행안부 공공데이터 | API | ✅ | `data/cctv_jeonbuk.csv` |
-| 조위 관측 (군산항, 2023~2026) | KHOA | 직접 다운 | ✅ | `data/군산_*.txt` → `processed/tide_hourly.csv` |
-| 인구 격자 (500m, 전북) | SGIS | 직접 다운 | ✅ | `data/sgis/` → `processed/population_grid.csv` |
-| 어선 현황 통계 | MDIS | 수동 | 🔲 | — |
-| 행정구역 경계 SHP | 국토정보플랫폼 | 직접 다운 | 🔲 | — |
+| 데이터 | 출처 | 수집 방식 | 상태 | 파일 | SHAP 인자 |
+|--------|------|----------|------|------|----------|
+| 기상 관측 (군산, 2023) | 기상청 ASOS | API | ✅ | `data/weather_gunsan_2023.csv` | 안개/야간 |
+| 기상 관측 (군산, 2024~25) | 기상청 ASOS | API | ✅ | `data/weather_gunsan_2023_2025.csv` | 안개/야간 |
+| 전북 CCTV 위치 | 행안부 공공데이터 | API | ✅ | `data/cctv_jeonbuk.csv` | `cctv_gap` |
+| 조위 관측 (군산항, 2023~2026) | KHOA | 직접 다운 | ✅ | `data/군산_*.txt` → `processed/tide_hourly.csv` | 만조 |
+| 인구 격자 (500m, 전북) | SGIS | 직접 다운 | ✅ | `data/sgis/` → `processed/population_grid.csv` | 고령비율 |
+| 어선 현황 통계 | MDIS | 수동 | 🔲 | — | `vessel_density` |
+| 행정구역 경계 SHP | 국토정보플랫폼 | 직접 다운 | 🔲 | — | — |
 
 ---
 
@@ -214,6 +221,7 @@ Phase 1의 목표는 **외부에서 접근 가능한 실 서비스 URL 확보**�
 | GET | `/api/grids/summary` | 통계 요약 |
 | GET | `/api/grids/top` | CVI 상위 N개 |
 | GET | `/api/grids/hotspots` | HH 핫스팟 목록 |
+| GET | `/api/grids/forecast` | 미래 날짜 전체 격자 예측 CVI (`?date=YYYY-MM-DD`, 최대 30일) |
 | GET | `/api/grids/{id}` | 격자 상세 |
 | GET | `/api/grids/{id}/timeseries` | STL 시계열 |
 | GET | `/api/alert/today` | 오늘 경보 상태 |

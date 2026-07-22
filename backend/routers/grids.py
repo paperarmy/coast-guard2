@@ -1,7 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from datetime import date as date_type, datetime as dt_obj
-from data.dummy_grids import get_all_grids, get_grid_by_id, get_top_grids, get_hh_grids
+
+try:
+    from services.cvi_calculator import get_all_grids, get_grid_by_id, get_top_grids, get_hh_grids
+except Exception:
+    from data.dummy_grids import get_all_grids, get_grid_by_id, get_top_grids, get_hh_grids
+
 from data.dummy_environment import get_timeseries_anomaly
 
 router = APIRouter()
