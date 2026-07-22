@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-PROCESSED = Path(__file__).parent.parent / "data" / "processed"
+PROCESSED = Path(__file__).resolve().parent.parent / "data" / "processed"
 
 # ── 계절 통계 로드 ────────────────────────────────────────────────────
 
