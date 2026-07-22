@@ -1,7 +1,7 @@
 """
 실 데이터 기반 현재 환경 조회
-- 조위: risk_calendar._predict_tide_day() 조석 수식 (군산항 반일주조 근사)
-- 안개/기상: seasonal_stats.csv 월별 통계 기반 확률 추정
+- 기상: 기상청 ASOS 실측 API (군산 140) → 실패 시 계절통계 fallback
+- 조위: 조석 수식 (군산항 반일주조 근사, 실시간 API 없음)
 - 완전 랜덤 제거: 같은 시각 같은 환경 값 반환
 """
 import math
@@ -99,8 +99,9 @@ def get_current_environment() -> dict:
     now = datetime.now()
     hour = now.hour
     month = now.month
+    is_night = hour >= 20 or hour < 6
 
-    # 조위
+    # ── 조위 (조석 수식) ─────────────────────────────────────────────
     tide_cm = _tide_at_hour(now)
     tide_m = round(tide_cm / 100, 2)
     is_high_tide = tide_cm >= 500
@@ -108,62 +109,72 @@ def get_current_environment() -> dict:
     next_high_h = round(_next_tide_event(now, want_high=True), 1)
     next_low_h = round(_next_tide_event(now, want_high=False), 1)
 
-    # 안개·시정
-    is_night = hour >= 20 or hour < 6
-    is_fog, vis_km = _fog_estimate(month, hour, tide_cm)
+    # ── 기상: ASOS 실측 API 우선 → 계절통계 fallback ────────────────
+    from services.weather_api import get_current_weather
+    real_wx = get_current_weather()
 
-    # 기온·풍속 (월별 평균 기준, 야간 보정)
-    temp_c = round(_MONTHLY_TEMP.get(month, 15.0) - (3.0 if is_night else 0.0), 1)
-    wind_ms = round(_MONTHLY_WIND.get(month, 4.0), 1)
-
-    # 풍향: 계절풍 (겨울=북서, 여름=남서)
-    if month in [12, 1, 2]:
-        wind_dir, wind_deg = "NW", 315
-    elif month in [6, 7, 8]:
-        wind_dir, wind_deg = "SW", 225
+    if real_wx:
+        temp_c   = real_wx["temperature_c"] or round(_MONTHLY_TEMP.get(month, 15.0) - (3.0 if is_night else 0.0), 1)
+        wind_ms  = real_wx["wind_speed_ms"]
+        wind_dir = real_wx["wind_direction"]
+        wind_deg = real_wx["wind_direction_deg"]
+        humidity = real_wx["humidity_pct"]
+        vis_km   = real_wx["visibility_km"]
+        is_fog   = real_wx["is_fog"]
+        condition = real_wx["condition"]
+        wx_source = real_wx["data_source"]
     else:
-        wind_dir, wind_deg = "W", 270
+        # 계절통계 fallback
+        is_fog, vis_km = _fog_estimate(month, hour, tide_cm)
+        temp_c  = round(_MONTHLY_TEMP.get(month, 15.0) - (3.0 if is_night else 0.0), 1)
+        wind_ms = round(_MONTHLY_WIND.get(month, 4.0), 1)
+        if month in [12, 1, 2]:
+            wind_dir, wind_deg = "NW", 315
+        elif month in [6, 7, 8]:
+            wind_dir, wind_deg = "SW", 225
+        else:
+            wind_dir, wind_deg = "W", 270
+        humidity = 85 if is_fog else (75 if is_night else 65)
+        condition = "안개" if is_fog else ("흐림" if humidity > 80 else "맑음")
+        wx_source = "계절통계 (ASOS API 실패)"
 
-    # 습도 추정
-    humidity = 85 if is_fog else (75 if is_night else 65)
-
-    # 3중 취약
+    # ── 3중 취약 ─────────────────────────────────────────────────────
     triple = is_night and is_high_tide and is_fog
     dual_count = sum([is_night, is_high_tide, is_fog])
 
     return {
         "timestamp": now.isoformat(),
         "station": "군산 (140)",
-        "data_source": "조석수식 + 계절통계 (실측 최신: 조위 2026-05, 기상 2025-12)",
+        "data_source": f"조석수식 + {wx_source}",
         "weather": {
-            "temperature_c": temp_c,
-            "humidity_pct": humidity,
-            "wind_speed_ms": wind_ms,
-            "wind_direction": wind_dir,
+            "temperature_c":      temp_c,
+            "humidity_pct":       humidity,
+            "wind_speed_ms":      wind_ms,
+            "wind_direction":     wind_dir,
             "wind_direction_deg": wind_deg,
-            "visibility_km": vis_km,
-            "is_fog": is_fog,
-            "condition": "안개" if is_fog else ("흐림" if humidity > 80 else "맑음"),
+            "visibility_km":      vis_km,
+            "is_fog":             is_fog,
+            "condition":          condition,
         },
         "tide": {
-            "height_m": tide_m,
-            "height_cm": tide_cm,
-            "is_high_tide": is_high_tide,
+            "height_m":           tide_m,
+            "height_cm":          tide_cm,
+            "is_high_tide":       is_high_tide,
             "next_high_tide_in_h": next_high_h,
-            "next_low_tide_in_h": next_low_h,
-            "tide_phase": tide_phase,
+            "next_low_tide_in_h":  next_low_h,
+            "tide_phase":         tide_phase,
         },
         "time": {
-            "hour": hour,
+            "hour":    hour,
             "is_night": is_night,
-            "period": "야간" if is_night else "주간",
+            "period":  "야간" if is_night else "주간",
         },
         "triple_risk": {
             "active": triple,
             "components": {
-                "night": is_night,
+                "night":     is_night,
                 "high_tide": is_high_tide,
-                "fog": is_fog,
+                "fog":       is_fog,
             },
             "level": (
                 "위험" if triple else

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import grids, alerts, environment, assets, calendar
+from routers import grids, alerts, environment, assets, calendar, cron
 
 app = FastAPI(
     title="해안경계 취약구간 모니터링 API",
@@ -24,6 +24,7 @@ app.include_router(alerts.router, prefix="/api/alert", tags=["경보"])
 app.include_router(environment.router, prefix="/api/environment", tags=["환경"])
 app.include_router(assets.router, prefix="/api/assets", tags=["감시자산"])
 app.include_router(calendar.router, prefix="/api/calendar", tags=["위험캘린더"])
+app.include_router(cron.router, prefix="/api/cron", tags=["Cron"])
 
 
 @app.get("/")

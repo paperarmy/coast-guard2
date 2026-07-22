@@ -15,6 +15,7 @@ from functools import lru_cache
 from services.cctv_loader import get_cctv_count, get_cctv_count_by_grid_id, has_cctv_data
 from services.population_loader import get_pop_density
 from services.vessel_loader import get_vessel_density, has_vessel_data
+from services.stl_service import get_stl_for_grid, has_stl_data
 
 REGIONS = {
     "군산": {"lat_range": (35.60, 35.95), "lon_range": (126.45, 126.75), "grid_count": 70,
@@ -117,8 +118,11 @@ def _build_grids() -> list[dict]:
             vd_real = get_vessel_density(lat, lon, region, coast_p)
             vessel_density = vd_real if vd_real >= 0 else cfg["vessel_est"]
 
-            # night_anomaly: 지역 편향 추정치 (Phase 2 STL 교체 예정)
-            night_anomaly  = round(min(0.70, cfg["night_bias"] + coast_p * 0.08), 3)
+            # night_anomaly: STL 분해 실 데이터 (없으면 지역 추정치)
+            if has_stl_data():
+                night_anomaly = get_stl_for_grid(coast_p)
+            else:
+                night_anomaly = round(min(0.70, cfg["night_bias"] + coast_p * 0.08), 3)
 
             # ── 3) CVI 산출 ───────────────────────────────────────────────
             # 더미와 동일한 구조: base_cvi × coast_adj
@@ -190,7 +194,7 @@ def _build_grids() -> list[dict]:
                     "cctv_gap":        "실 데이터 (data.go.kr)" if cctv_available else "더미 (cctv_jeonbuk.csv 미수집)",
                     "old_building":    "실 데이터 (인구밀도 proxy)",
                     "vessel_density":  "실 데이터 (MDIS 어선현황)" if has_vessel_data() else "추정치 (MDIS 수집 전)",
-                    "night_anomaly":   "추정치 (Phase 2 STL 교체 예정)",
+                    "night_anomaly":   "실 데이터 (STL 분해 918일)" if has_stl_data() else "추정치 (STL 미구동)",
                 },
             })
             grid_id += 1

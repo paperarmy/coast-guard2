@@ -380,7 +380,9 @@ async function loadTimeseries() {
     }
   });
 
-  $("ts-info").textContent = `격자 ${gridId} | ${data.region} | 최근 90일 야간 이상 지수 추이 (STL 잔차)`;
+  const src = data.data_source || "STL 잔차";
+  const endDate = data.series.length ? data.series[data.series.length - 1].date : "";
+  $("ts-info").textContent = `격자 ${gridId} | ${data.region} | 야간 이상 지수 추이 (${src}${endDate ? " · 최신: " + endDate : ""})`;
 }
 
 /* ===================== 격자 상세 ===================== */
@@ -457,11 +459,11 @@ const calState = {
 };
 
 async function initCalendar() {
-  // 날짜 입력 범위 설정
+  // 날짜 입력 범위 설정 (+90일)
   const inp = $("cal-date-input");
   if (inp) {
     const maxD = new Date();
-    maxD.setDate(maxD.getDate() + 30);
+    maxD.setDate(maxD.getDate() + 90);
     inp.max = maxD.toISOString().slice(0, 10);
   }
 
@@ -471,8 +473,8 @@ async function initCalendar() {
   const hist = await fetchAPI("/calendar/range?start=2023-03-01&end=" + endStr);
   if (hist) hist.days.forEach(d => { calState.allDays[d.date] = d; });
 
-  // 미래 30일 예측 로드
-  const fore = await fetchAPI("/calendar/forecast?days=30");
+  // 미래 90일 예측 로드
+  const fore = await fetchAPI("/calendar/forecast?days=90");
   if (fore) fore.forecast.forEach(d => {
     calState.allDays[d.date] = d;
     calState.forecastDays[d.date] = true;
@@ -517,7 +519,7 @@ function initDashForecastPicker() {
   tomorrow.setDate(tomorrow.getDate() + 1);
   inp.min = tomorrow.toISOString().slice(0, 10);
   const maxD = new Date();
-  maxD.setDate(maxD.getDate() + 30);
+  maxD.setDate(maxD.getDate() + 90);
   inp.max = maxD.toISOString().slice(0, 10);
 }
 
@@ -690,8 +692,8 @@ async function selectCalDay(dateStr) {
 }
 
 async function renderCalTrend() {
-  // 최근 90일 실측 + 30일 예측
-  const endDate   = new Date(); endDate.setDate(endDate.getDate() + 30);
+  // 최근 90일 실측 + 90일 예측
+  const endDate   = new Date(); endDate.setDate(endDate.getDate() + 90);
   const startDate = new Date(); startDate.setDate(startDate.getDate() - 90);
   const fmt = d => d.toISOString().slice(0,10);
 
