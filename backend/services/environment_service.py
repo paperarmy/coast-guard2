@@ -114,7 +114,7 @@ def get_current_environment() -> dict:
     real_wx = get_current_weather()
 
     if real_wx:
-        temp_c   = real_wx["temperature_c"] or round(_MONTHLY_TEMP.get(month, 15.0) - (3.0 if is_night else 0.0), 1)
+        temp_c   = real_wx["temperature_c"] if real_wx["temperature_c"] is not None else round(_MONTHLY_TEMP.get(month, 15.0) - (3.0 if is_night else 0.0), 1)
         wind_ms  = real_wx["wind_speed_ms"]
         wind_dir = real_wx["wind_direction"]
         wind_deg = real_wx["wind_direction_deg"]
@@ -193,13 +193,13 @@ def get_7day_forecast() -> list:
     now = datetime.now()
 
     for i, fc in enumerate(forecast_data):
-        target = date.today() + timedelta(days=i)
+        target = date.today() + timedelta(days=i + 1)  # get_forecast는 내일(day+1)부터 시작
         month = target.month
         stats = _seasonal_row(month)
 
         result.append({
             "date": fc["date"],
-            "day_label": ["오늘", "내일", "모레"][i] if i < 3 else target.strftime("%m/%d"),
+            "day_label": ["내일", "모레"][i] if i < 2 else target.strftime("%m/%d"),
             "triple_risk_count": fc["predicted_triple_hours"],
             "risk_hours": [],
             "level": fc["risk_level"],

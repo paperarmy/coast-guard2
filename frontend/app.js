@@ -29,6 +29,15 @@ function formatKorTime() {
   return new Date().toLocaleString("ko-KR", { hour12: false, year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit" });
 }
 
+// toISOString()은 UTC 기준 → KST(UTC+9) 자정 이후 9시간까지 날짜가 하루 앞으로 밀림
+// 로컬 날짜 기준 YYYY-MM-DD 생성 (모든 날짜 입력값에 사용)
+function fmtDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /* ===================== 초기화 ===================== */
 window.onload = async () => {
   startClock();
@@ -325,7 +334,7 @@ async function loadTimeseries() {
   const gridId = $("ts-grid-select").value;
   if (!gridId) return;
   const data = await fetchAPI(`/grids/${gridId}/timeseries?days=90`);
-  if (!data) return;
+  if (!data || !data.series) return;
 
   const labels = data.series.map(d => d.date);
   const values = data.series.map(d => d.anomaly_index);
@@ -464,12 +473,12 @@ async function initCalendar() {
   if (inp) {
     const maxD = new Date();
     maxD.setDate(maxD.getDate() + 90);
-    inp.max = maxD.toISOString().slice(0, 10);
+    inp.max = fmtDate(maxD);
   }
 
   // 실측 전체 범위 로드
   const end = new Date(); end.setDate(end.getDate() - 1);
-  const endStr = end.toISOString().slice(0, 10);
+  const endStr = fmtDate(end);
   const hist = await fetchAPI("/calendar/range?start=2023-03-01&end=" + endStr);
   if (hist) hist.days.forEach(d => { calState.allDays[d.date] = d; });
 
@@ -485,7 +494,7 @@ async function initCalendar() {
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return fmtDate(new Date());
 }
 
 function calNav(dir) {
@@ -517,10 +526,10 @@ function initDashForecastPicker() {
   if (!inp) return;
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  inp.min = tomorrow.toISOString().slice(0, 10);
+  inp.min = fmtDate(tomorrow);
   const maxD = new Date();
   maxD.setDate(maxD.getDate() + 90);
-  inp.max = maxD.toISOString().slice(0, 10);
+  inp.max = fmtDate(maxD);
 }
 
 async function loadForecastGrids(dateStr) {
@@ -695,7 +704,7 @@ async function renderCalTrend() {
   // 최근 90일 실측 + 90일 예측
   const endDate   = new Date(); endDate.setDate(endDate.getDate() + 90);
   const startDate = new Date(); startDate.setDate(startDate.getDate() - 90);
-  const fmt = d => d.toISOString().slice(0,10);
+  const fmt = fmtDate;
 
   const days    = [];
   const labels  = [];

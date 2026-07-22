@@ -11,7 +11,9 @@ import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-API_KEY = "51d325a98e467da61d7f9d3be53c299fbc91742fc24fc5a95157148a5a6c3d05"
+API_KEY = os.getenv("DATA_GO_KR_KEY", "")
+if not API_KEY:
+    raise RuntimeError("DATA_GO_KR_KEY 환경변수를 설정하세요 (.env 파일 또는 export)")
 BASE_URL = "https://apis.data.go.kr/6540000/cctvService/getCctvList"
 PAGE_SIZE = 1000
 OUT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),

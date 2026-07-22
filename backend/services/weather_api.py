@@ -111,7 +111,7 @@ def get_current_weather() -> dict | None:
         is_fog  = vis_m < 1000  # 기상학적 안개 기준: 1km 미만
     else:
         vis_km  = None
-        is_fog  = humidity >= 90 and (now.hour >= 20 or now.hour < 6)
+        is_fog  = humidity >= 90 and (target.hour >= 20 or target.hour < 6)
 
     # 날씨 상태
     if rn_mm and rn_mm > 0:

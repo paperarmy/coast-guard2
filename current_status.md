@@ -6,10 +6,10 @@
 ## 전체 진행률
 
 ```
-Phase 0 (프로토타입)   ████████████████████ 100%  ✅
-Phase 1 (Vercel + 실 데이터) ████████████████████  100%  ✅ 완료
-Phase 2 (자동화)       ░░░░░░░░░░░░░░░░░░░░   0%  🔲
-Phase 3 (전국 확장)    ░░░░░░░░░░░░░░░░░░░░   0%  🔲
+Phase 0 (프로토타입)         ████████████████████ 100%  ✅
+Phase 1 (Vercel + 실 데이터) ████████████████████ 100%  ✅ 완료
+Phase 2 (자동화 + 고도화)    ████████████████████ 100%  ✅ 완료
+Phase 3 (전국 확장)          ░░░░░░░░░░░░░░░░░░░░   0%  🔲
 ```
 
 ---
@@ -53,7 +53,7 @@ Phase 3 (전국 확장)    ░░░░░░░░░░░░░░░░░�
 - [x] `api/index.py` — Vercel Python 런타임용 FastAPI ASGI 래퍼 (`sys.path` 설정)
 - [x] `api/requirements.txt` — Vercel 전용 (uvicorn/apscheduler/geopandas 제외)
 - [x] `frontend/app.js` `API` 상수 — `localhost` 판별 → 환경별 자동 분기
-- [x] `backend/main.py` CORS — `allow_origin_regex` 로 `*.vercel.app` 전체 허용
+- [x] `backend/main.py` CORS — `allow_origin_regex` 로 `coast-guard*.vercel.app` 허용
 - [x] `backend/data/processed/` 7개 CSV — git 포함 (Vercel 접근 가능)
 - [x] `.gitattributes` — `eol=lf` 강제 (Vercel Linux 환경 기준)
 - [x] `.env.example` 생성, `.gitignore` 정비 (`/data/` 원본 제외)
@@ -79,44 +79,67 @@ Phase 3 (전국 확장)    ░░░░░░░░░░░░░░░░░�
 
 ### 실 데이터 서비스 레이어 ✅ 전부 완료
 - [x] `services/cctv_loader.py` — data.go.kr CCTV 데이터 → 격자별 CCTV 수 매핑
-  - processed CSV 우선 읽기 (Vercel), 원본 파일 직접 반경 계산 fallback
 - [x] `services/population_loader.py` — SGIS 인구밀도 → 격자별 old_building proxy
 - [x] `services/vessel_loader.py` — MDIS 어선현황 → 격자별 vessel_density
-  - processed CSV 우선 읽기 (Vercel), 원본 MDIS 파일 fallback
 - [x] `services/cvi_calculator.py` — SHAP 가중치 기반 실 CVI 산출 (dummy_grids 교체)
-  - coast_proximity ✅ 실 데이터 / cctv_gap ✅ 실 데이터 / old_building ✅ 인구 proxy
-  - vessel_density ✅ MDIS 실 데이터 / night_anomaly ⏳ Phase 2 STL 예정
 - [x] `services/environment_service.py` — 조석수식 + 계절통계 기반 현재 환경 (dummy_environment 교체)
 - [x] `backend/scripts/preprocess_assets.py` — Vercel용 processed CSV 생성 스크립트
 
-### 라우터 실 데이터 교체
-- [x] `routers/grids.py` — `cvi_calculator` try/except fallback
-- [x] `routers/environment.py` — `environment_service` try/except fallback
-
 ### 위험 캘린더 백엔드
 - [x] `services/risk_calendar.py` — 과거 실측 조회 + 미래 예측 서비스 (@lru_cache)
-- [x] `services/risk_calendar.py` `get_env_day_forecast()` — 특정 미래 날짜의 환경 위험지수 요약 (격자 예측에 사용)
 - [x] `routers/calendar.py` — 4개 API 엔드포인트
-- [x] `main.py` — calendar 라우터 등록
 
 ### 위험 캘린더 프론트엔드
 - [x] 월간 히트맵 — risk-0~risk-10 색상 + 3중취약 노란 점 표시
 - [x] 실측/예측 구분 — 예측 셀에 점선 테두리 오버레이
-- [x] 날짜 클릭 → 24시간 막대 차트 (빨강=3중/주황=2중/파랑=만조/보라=안개)
-- [x] 일별 조건 합계 패널 (만조·안개·야간·3중취약 시간 수)
+- [x] 날짜 클릭 → 24시간 막대 차트
 - [x] 예측 신뢰도 바 (80%→30%, 경과 일수 비례 감소)
-- [x] 하단 트렌드 차트 — 90일 실측 + 30일 예측 바차트
+- [x] 하단 트렌드 차트 — 90일 실측 + 90일 예측 바차트
 - [x] 날짜 직접 입력 (`<input type="date">`) — 선택 즉시 해당 월·일 자동 이동
 
-### 격자별 미래 CVI 예측 모드 (신규)
-- [x] `GET /api/grids/forecast?date=YYYY-MM-DD` 엔드포인트 추가
-  - 조석 수식 + 계절 통계로 해당 날의 환경 조건 예측 (env_multiplier 산출)
-  - 210개 격자마다 `coast_proximity` · `night_anomaly_index` 민감도 가중 → 예측 CVI 반환
-  - 신뢰도: D+1=80% → D+30=30% 선형 감소
-- [x] 대시보드 상단 예측 컨트롤 바 — 날짜 선택 (내일 ~ +30일)
-- [x] 예측 모드 진입 시 지도·우선순위·통계·격자 테이블 전부 예측 CVI로 교체
+### 격자별 미래 CVI 예측 모드
+- [x] `GET /api/grids/forecast?date=YYYY-MM-DD` — 격자 예측 CVI (최대 90일)
+- [x] 대시보드 예측 컨트롤 바 — 날짜 선택 → 지도·테이블 전부 예측 CVI로 교체
 - [x] 지도 팝업 — 기본 CVI 대비 변화량(Δ) 표시
-- [x] 경보 배너 → "예측 모드" 표시 전환, "← 현재" 버튼으로 실시간 복원
+
+---
+
+## Phase 2 완료 항목 ✅ (2026-07-22 완료)
+
+### night_anomaly 실 데이터화 (STL 분해)
+- [x] `backend/scripts/run_stl.py` — 918일 야간·만조·안개 시계열 STL 분해 실행
+- [x] `data/processed/night_anomaly_monthly.csv` — 월별 이상지수 12행 (12월=1.0, 9월=0.0)
+- [x] `data/processed/night_anomaly_daily.csv` — 918일 trend/seasonal/residual
+- [x] `services/stl_service.py` — 월별·일별 STL 결과 서비스 레이어
+- [x] `services/cvi_calculator.py` night_anomaly — STL 실 데이터로 교체 완료
+
+### 기상청 ASOS 실측 API 연동
+- [x] `services/weather_api.py` — 군산 관측소(140) 현재 시각 기상 조회
+  - 실패 시 계절통계 fallback
+- [x] `services/environment_service.py` — ASOS API 우선 → 계절통계 fallback
+- [x] `GET /api/environment/current` — 실측 기상 + 조석 수식 혼합 응답
+
+### Vercel Cron Job 설정
+- [x] `vercel.json` — Cron Job 매일 자정 UTC 실행 (`"0 0 * * *"`)
+- [x] `routers/cron.py` — 캐시 초기화·워밍 엔드포인트 (`/api/cron/refresh`)
+  - CRON_SECRET 인증 필수
+- [x] 캐시 갱신 대상: cctv, vessel, population, stl, environment, cvi, risk_calendar
+
+### STL 잔차 이상탐지 탭 실 데이터 연동
+- [x] `routers/grids.py` — STL 일별 시계열 → `/api/grids/{id}/timeseries` (최대 918일)
+- [x] 이상탐지 탭 차트 — 실측 night_anomaly_index + 3중취약일 마커
+
+### 코드 리뷰 버그 수정 (2026-07-22)
+- [x] `collect_cctv.py` — API 키 하드코딩 제거 (→ `DATA_GO_KR_KEY` 환경변수)
+- [x] `cron.py` — CRON_SECRET 미설정 시 인증 우회 수정 (기본 차단으로 변경)
+- [x] `cron.py` — `_clear_caches()` 누락 모듈 추가 (cvi_calculator, risk_calendar)
+- [x] `cron.py` — `/api/cron/status` 인증 없는 접근 차단
+- [x] `environment_service.py` — 7일 예측 레이블 1일 오프셋 수정 (오늘→내일 기준 정렬)
+- [x] `environment_service.py` — 0°C falsy-zero 버그 수정 (`is not None` 체크)
+- [x] `main.py` — CORS regex 범위 축소 (`coast-guard*` 한정)
+- [x] `weather_api.py` — 안개 판단 시각 오류 수정 (`now.hour` → `target.hour`)
+- [x] `app.js` — `data.series` undefined 가드 추가
+- [x] `app.js` — 날짜 계산 UTC 오프셋 버그 수정 (`fmtDate` 로컬 날짜 헬퍼 도입)
 
 ---
 
@@ -130,7 +153,9 @@ Phase 3 (전국 확장)    ░░░░░░░░░░░░░░░░░�
 | 논문과의 차이 | 실 데이터는 여름 집중 | 논문: 가을 집중 가설 → 수정 필요 |
 | 만조 시간 비율 | 28.4% | 조위 ≥ 500cm 기준 |
 | 안개 시간 비율 | 20.5% | 시정 < 1km 기준 |
-| 서해안 격자 내 CCTV | 2,179건 / 13,865건 전체 | 서비스 범위: 35.0~35.97°N, 126.45~126.75°E |
+| STL 최대 이상 월 | 12월(1.0), 11월(0.97), 1~2월(0.83) | 동절기 야간 안개 집중 |
+| STL 최저 이상 월 | 9월(0.0), 6월(0.13) | 하절기 이상지수 낮음 |
+| 서해안 격자 내 CCTV | 2,179건 / 13,865건 전체 | 서비스 범위: 35.0~35.97°N |
 | 어선 현황 (MDIS 2020) | 군산 456 / 부안 409 / 고창 75척 | 총 940척 |
 
 ---
@@ -147,9 +172,15 @@ Phase 3 (전국 확장)    ░░░░░░░░░░░░░░░░░�
 | 6 | 캘린더 range API 400 오류 | 1100일 제한 → 1500일로 상향 | ✅ 해결 |
 | 7 | 3중 취약 간조→만조 오기재 | 논문 오입력 → 전체 6개 파일 수정 완료 | ✅ 해결 |
 | 8 | git CRLF 경고 (Windows autocrlf) | `.gitattributes` `eol=lf` + renormalize 적용 | ✅ 해결 |
-| 9 | Vercel `PUT /api/assets` 파일 쓰기 불가 | OSError 잡아 HTTP 503 반환, Phase 2 DB 이전 전까지 읽기 전용 | ✅ 해결 |
-| 10 | Vercel 원본 데이터(`data/`) 접근 불가 | `processed/cctv_grid_counts.csv`, `vessel_summary.csv` 생성 → git 포함 | ✅ 해결 |
+| 9 | Vercel `PUT /api/assets` 파일 쓰기 불가 | OSError 잡아 HTTP 503 반환 | ✅ 해결 |
+| 10 | Vercel 원본 데이터(`data/`) 접근 불가 | `processed/` CSV 생성 → git 포함 | ✅ 해결 |
 | 11 | `Path(__file__).parent...` 상대경로 버그 | 모든 loader에 `.resolve()` 추가 | ✅ 해결 |
+| 12 | Vercel cron 주기 오류 (Hobby 플랜 제한) | `"0 * * * *"` → `"0 0 * * *"` 수정 | ✅ 해결 |
+| 13 | CRON_SECRET 미설정 시 인증 우회 | 기본 차단(deny-by-default)으로 변경 | ✅ 해결 |
+| 14 | 7일 예측 레이블 1일 오프셋 | `timedelta(days=i+1)` + 레이블 내일/모레 기준 수정 | ✅ 해결 |
+| 15 | ASOS 0°C 반환 시 falsy-zero로 계절값 대체 | `is not None` 조건으로 수정 | ✅ 해결 |
+| 16 | 안개 판단 시각 오류 (now.hour vs target.hour) | 관측 시각(target.hour) 기준으로 수정 | ✅ 해결 |
+| 17 | app.js UTC 날짜 오프셋 (KST 00~09시) | `fmtDate()` 로컬 날짜 헬퍼 도입 | ✅ 해결 |
 
 ---
 
@@ -161,15 +192,18 @@ Phase 3 (전국 확장)    ░░░░░░░░░░░░░░░░░�
 ✅ GET /api/grids/summary
 ✅ GET /api/grids/top
 ✅ GET /api/grids/hotspots
-✅ GET /api/grids/forecast?date=YYYY-MM-DD                   (격자별 예측 CVI, 최대 30일)
+✅ GET /api/grids/forecast?date=YYYY-MM-DD                   (격자별 예측 CVI, 최대 90일)
+✅ GET /api/grids/{id}/timeseries?days=90                    (STL 이상탐지 실 데이터)
 ✅ GET /api/alert/today
-✅ GET /api/alert/forecast
-✅ GET /api/environment/current                              (조석수식 + 계절통계 기반)
+✅ GET /api/alert/forecast                                   (7일 예측, 내일 기준 레이블)
+✅ GET /api/environment/current                              (ASOS 실측 + 조석수식)
 ✅ GET /api/assets
-✅ GET /api/calendar/range?start=2023-03-01&end=2025-09-04   (918일 실측)
-✅ GET /api/calendar/day/2025-09-07                           (시간별 24행, 3중취약 확인)
-✅ GET /api/calendar/forecast?days=30                         (30일 예측)
-✅ GET /api/calendar/stats                                    (종합 통계)
+✅ GET /api/calendar/range?start=2023-03-01&end=2025-09-04  (918일 실측)
+✅ GET /api/calendar/day/2025-09-07                          (시간별 24행)
+✅ GET /api/calendar/forecast?days=90                        (90일 예측)
+✅ GET /api/calendar/stats                                   (종합 통계)
+✅ GET /api/cron/refresh  (CRON_SECRET Bearer 토큰 필수)
+🔒 GET /api/cron/status   (CRON_SECRET Bearer 토큰 필수)
 ```
 
 로컬: http://localhost:8000/docs | 프론트: http://localhost:5173  
@@ -177,13 +211,12 @@ Phase 3 (전국 확장)    ░░░░░░░░░░░░░░░░░�
 
 ---
 
-## Phase 2 추천 작업 (다음 단계)
+## Phase 3 추천 작업 (다음 단계)
 
 | 우선순위 | 항목 | 설명 |
 |---------|------|------|
-| Critical | **night_anomaly 실 데이터화** | Phase 2 STL 분해 → 실제 야간 이상 지수 산출 |
-| High | **기상청 단기예보 API 연동** | 격자 예측 정밀도 향상 (현재 계절 통계 기반) |
-| High | **Vercel Cron Job 설정** | 매일 자정 데이터 갱신 (예측 모델 자동 업데이트) |
-| Medium | **Vercel Postgres or Supabase 도입** | assets.json → DB 이전 (PUT 정상화) |
-| Medium | **STL 잔차 실 데이터 연동** | 이상탐지 탭 차트에 실측 night_anomaly 표시 |
-| Low | **격자별 노후건물 비율** | SGIS or 건물대장 연동 (현재 인구밀도 proxy) |
+| High | **Vercel Postgres 도입** | `assets.json` → DB 이전 (PUT 정상화, Phase 2 미완) |
+| High | **기상청 단기예보 API** | 7일 예측을 계절통계 → 실 예보 데이터로 교체 |
+| Medium | **격자별 노후건물 비율** | SGIS or 건물대장 연동 (현재 인구밀도 proxy) |
+| Medium | **전국 확장 데이터 수집** | 충남·경남 등 추가 해안선 격자 |
+| Low | **모바일 최적화** | 반응형 레이아웃, 스와이프 제스처 |

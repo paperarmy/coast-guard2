@@ -27,6 +27,8 @@ def _clear_caches():
         "services.population_loader",
         "services.stl_service",
         "services.environment_service",
+        "services.cvi_calculator",
+        "services.risk_calendar",
     ]
     cleared = []
     for mod_name in targets:
@@ -74,7 +76,7 @@ def cron_refresh(authorization: str = Header(default="")):
     Vercel Cron에서 1시간마다 호출.
     CRON_SECRET 환경변수가 설정된 경우 Bearer 토큰으로 검증.
     """
-    if _CRON_SECRET and authorization != f"Bearer {_CRON_SECRET}":
+    if not _CRON_SECRET or authorization != f"Bearer {_CRON_SECRET}":
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     cleared = _clear_caches()
@@ -89,8 +91,10 @@ def cron_refresh(authorization: str = Header(default="")):
 
 
 @router.get("/status")
-def cron_status():
+def cron_status(authorization: str = Header(default="")):
     """캐시 및 데이터 파일 상태 확인 (디버그용)."""
+    if not _CRON_SECRET or authorization != f"Bearer {_CRON_SECRET}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
     from pathlib import Path
     processed = Path(__file__).resolve().parent.parent / "data" / "processed"
 
