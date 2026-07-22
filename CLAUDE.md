@@ -9,38 +9,58 @@
 
 ```
 coast-guard/
+├── api/
+│   ├── index.py              ← Vercel Serverless 진입점 (FastAPI ASGI 래퍼)
+│   └── requirements.txt      ← Vercel 전용 패키지 목록
 ├── backend/
-│   ├── main.py               ← FastAPI 앱 진입점 (5개 라우터 등록)
+│   ├── main.py               ← FastAPI 앱 진입점 (6개 라우터 등록)
 │   ├── routers/
-│   │   ├── grids.py          ← 격자 목록/상세/시계열/핫스팟
+│   │   ├── grids.py          ← 격자 목록/상세/시계열/핫스팟/예측
 │   │   ├── alerts.py         ← 오늘 경보 / 7일 예측
 │   │   ├── environment.py    ← 현재 환경 (기상+조위)
 │   │   ├── assets.py         ← 감시 자산 목록/수정
-│   │   └── calendar.py       ← 위험 캘린더 (range/day/forecast/stats)
+│   │   ├── calendar.py       ← 위험 캘린더 (range/day/forecast/stats)
+│   │   └── cron.py           ← Vercel Cron Job 캐시 갱신 엔드포인트
 │   ├── services/
-│   │   ├── data_pipeline.py  ← 조위·기상·인구 전처리 (1회성 실행)
-│   │   └── risk_calendar.py  ← 캘린더 서비스 (실측 조회 + 미래 예측)
+│   │   ├── cvi_calculator.py    ← SHAP 가중치 기반 실 CVI 산출 (5개 인자 전부 실 데이터)
+│   │   ├── cctv_loader.py       ← CCTV 격자 매핑 (processed CSV 우선)
+│   │   ├── vessel_loader.py     ← MDIS 어선 밀도
+│   │   ├── population_loader.py ← SGIS 인구밀도 → old_building proxy
+│   │   ├── stl_service.py       ← STL 분해 결과 서비스 (night_anomaly_index)
+│   │   ├── weather_api.py       ← 기상청 ASOS 실측 API (군산 140, 실패 시 None)
+│   │   ├── environment_service.py ← 현재 환경 (ASOS 실측 + 조석수식)
+│   │   ├── risk_calendar.py     ← 캘린더 서비스 (실측 조회 + 미래 예측)
+│   │   └── data_pipeline.py     ← 조위·기상·인구 전처리 (1회성 실행)
+│   ├── scripts/
+│   │   ├── collect_cctv.py      ← data.go.kr CCTV 수집 (DATA_GO_KR_KEY 필수)
+│   │   ├── preprocess_assets.py ← Vercel용 processed CSV 생성
+│   │   └── run_stl.py           ← STL 분해 실행 (statsmodels, 1회성)
 │   ├── data/
-│   │   ├── dummy_grids.py    ← 격자 더미 데이터 (실 데이터 전 사용)
-│   │   ├── dummy_environment.py ← 환경 더미 (기상+조위)
-│   │   ├── assets.json       ← 감시 자산 위치 (런타임 편집 가능)
-│   │   └── processed/        ← 전처리 결과 CSV (git 제외)
-│   │       ├── tide_hourly.csv      (25,656행)
-│   │       ├── weather_hourly.csv   (26,304행)
-│   │       ├── population_grid.csv  (8,575격자)
-│   │       ├── daily_risk.csv       (918일)
-│   │       └── seasonal_stats.csv   (월별 계절 통계)
+│   │   ├── dummy_grids.py    ← 격자 더미 (import 오류 시 fallback 전용)
+│   │   ├── dummy_environment.py ← 환경 더미 (import 오류 시 fallback 전용)
+│   │   ├── assets.json       ← 감시 자산 위치 (Vercel 환경: 읽기 전용)
+│   │   └── processed/        ← 전처리 결과 CSV (git 포함, Vercel 접근용)
+│   │       ├── tide_hourly.csv         (25,656행)
+│   │       ├── weather_hourly.csv      (26,304행)
+│   │       ├── population_grid.csv     (8,575격자)
+│   │       ├── cctv_grid_counts.csv    (210격자별 CCTV 수)
+│   │       ├── vessel_summary.csv      (지역별 어선 수 3행)
+│   │       ├── daily_risk.csv          (918일)
+│   │       ├── seasonal_stats.csv      (월별 계절 통계)
+│   │       ├── night_anomaly_monthly.csv (STL 월별 이상지수 12행)
+│   │       └── night_anomaly_daily.csv   (STL 일별 918행)
 │   └── requirements.txt
 ├── frontend/
 │   ├── index.html            ← 단일 HTML 파일 (Node.js 불필요)
 │   ├── style.css             ← 다크모드 전용 스타일
 │   └── app.js                ← 전체 프론트엔드 로직
-└── data/                     ← 수집된 원본 데이터 (git 제외 권장)
+└── data/                     ← 수집된 원본 데이터 (git 제외)
     ├── cctv_jeonbuk.csv
     ├── weather_gunsan_2023.csv
     ├── weather_gunsan_2023_2025.csv
     ├── 군산_*.txt             ← KHOA 조위 관측 (월별 TXT)
-    └── sgis/                 ← SGIS 격자인구 SHP + CSV
+    ├── sgis/                 ← SGIS 격자인구 SHP + CSV
+    └── 2020_해수면-어선현황_*.csv ← MDIS 어선현황
 ```
 
 ---
@@ -54,7 +74,7 @@ coast-guard/
 | Frontend | 순수 HTML/CSS/JS | Node.js 없음, CDN으로 Leaflet + Chart.js |
 | 지도 | Leaflet.js 1.9.4 | OpenStreetMap 타일 |
 | 차트 | Chart.js 4.4.0 | 시계열 이상탐지 그래프 |
-| DB | 없음 (Phase 1) | Phase 2에서 Vercel Postgres 또는 Supabase 도입 예정 |
+| DB | 없음 (Phase 1·2) | Phase 3에서 Vercel Postgres 또는 Supabase 도입 예정 |
 
 ---
 
@@ -150,22 +170,34 @@ python -m http.server 5173 --directory frontend
 - FastAPI 백엔드 + 순수 HTML/JS/CSS 프론트엔드 (5탭) — 로컬 실행
 - 더미 데이터 기반 전체 UI 구현 확인 (12개 API 엔드포인트)
 - `services/data_pipeline.py` — 조위(KHOA TXT) + 기상(ASOS CSV) + 인구(SGIS SHP) 전처리
-- `services/risk_calendar.py` — 과거 918일 실측 + 미래 30일 예측 서비스
+- `services/risk_calendar.py` — 과거 918일 실측 + 미래 90일 예측 서비스
 - `routers/calendar.py` — 4개 캘린더 API 엔드포인트
 
-### Phase 1 — Vercel 배포 + 실 데이터 연동 완성
+### Phase 1 완료 (2026-07-22) — Vercel 배포 + 실 데이터 연동
 
-**1-A. Vercel 배포 환경 (선행):**
-1. `vercel.json` 작성 — 정적 프론트엔드 + `/api/*` 서버리스 라우팅
-2. `api/index.py` 생성 — Vercel Python 런타임용 FastAPI ASGI 래퍼
-3. `frontend/app.js` `API` 상수 → 환경 감지 방식으로 변경 (`/api` 상대 경로)
-4. `backend/main.py` CORS — `https://*.vercel.app` 추가
-5. `backend/data/processed/` `.gitignore`에서 제외 → git 포함
+**1-A. Vercel 배포 환경:**
+- `vercel.json` — 정적 프론트엔드 + `/api/*` 서버리스 라우팅 + Cron Job
+- `api/index.py` — Vercel Python 런타임용 FastAPI ASGI 래퍼
+- `frontend/app.js` `API` 상수 — `localhost` 판별 → `/api` 상대 경로
+- `backend/main.py` CORS — `coast-guard*.vercel.app` 한정 허용
+- `backend/data/processed/` — git 포함 (Vercel 서버리스 접근용)
 
-**1-B. 실 데이터 연동:**
-1. `backend/services/cctv_loader.py` — `data/cctv_jeonbuk.csv` → 격자별 CCTV 수 매핑
-2. `backend/services/cvi_calculator.py` — SHAP 가중치 기반 실 CVI 산출
-3. `backend/routers/environment.py` — `dummy_environment` → 실 데이터 서비스로 교체
+**1-B. 실 데이터 연동 (5개 SHAP 인자 전부 실 데이터):**
+- `services/cvi_calculator.py` — coast_proximity·cctv_gap·old_building·vessel_density·night_anomaly
+- `services/cctv_loader.py` — processed CSV 우선, 원본 직접 계산 fallback
+- `services/population_loader.py` / `vessel_loader.py` — SGIS·MDIS 실 데이터
+- `services/environment_service.py` — 조석수식 + 기상청 ASOS 실측 API fallback
+- `scripts/preprocess_assets.py` — Vercel용 processed CSV 생성
+
+### Phase 2 완료 (2026-07-22) — 자동화·고도화
+
+- `scripts/run_stl.py` — 918일 STL 분해 → `processed/night_anomaly_*.csv`
+- `services/stl_service.py` — night_anomaly_index 실 데이터 서비스
+- `services/weather_api.py` — 기상청 ASOS 실측 API (stnId=140, 실패 시 None)
+- `routers/cron.py` — `/api/cron/refresh` (CRON_SECRET 필수, 캐시 전체 갱신)
+- `vercel.json` cron — 매일 자정 UTC 실행 (`"0 0 * * *"`, Hobby 플랜 최소 주기)
+- 격자 예측 CVI 모드 — `GET /api/grids/forecast?date=` (최대 90일)
+- 캘린더 예측 90일로 확장
 
 ### 더미 데이터 폴백 정책
 실 데이터 서비스가 미구현·오류·파일 누락 상태일 때는 더미 데이터로 서비스한다. 사용자에게 빈 화면을 보여주는 것보다 더미로라도 동작하는 상태가 우선이다.

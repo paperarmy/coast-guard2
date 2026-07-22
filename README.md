@@ -26,11 +26,11 @@
 
 | 탭 | 내용 |
 |----|------|
-| 대시보드 | CVI 히트맵 지도, 오늘의 경계 중점, 3중 취약 경보 배너, 7일 예측 |
+| 대시보드 | CVI 히트맵 지도, 오늘의 경계 중점, 3중 취약 경보 배너, 7일 예측, **격자별 미래 CVI 예측 모드** |
 | 격자 분석 | 210개 격자 테이블 (정렬/필터/CSV 내보내기), 격자 상세 SHAP 패널 |
 | 감시 자산 | 드론·TOD·CCTV·해경 배치 현황 지도 |
-| 이상탐지 | 격자별 야간 이상 지수 시계열 그래프 (STL 분해) |
-| **위험 캘린더** | 월간 위험 히트맵, 날짜별 시간별 조건 분해, 30일 예측, 트렌드 차트 |
+| 이상탐지 | 격자별 야간 이상 지수 시계열 그래프 (STL 분해 918일 실측) |
+| 위험 캘린더 | 월간 위험 히트맵, 날짜별 시간별 조건 분해, 90일 예측, 트렌드 차트 |
 
 ---
 
@@ -44,24 +44,31 @@
 
 ```bash
 cd coast-guard/backend
-pip install fastapi uvicorn pydantic httpx pandas numpy python-dotenv geopandas
+pip install fastapi uvicorn pydantic httpx pandas numpy python-dotenv geopandas statsmodels
 ```
 
-### 2단계 — 백엔드 실행
+### 2단계 — 환경변수 설정
+
+```bash
+cp .env.example .env
+# .env 파일에 DATA_GO_KR_KEY 입력
+```
+
+### 3단계 — 백엔드 실행
 
 ```bash
 # coast-guard/backend 디렉토리에서
 python -m uvicorn main:app --reload --port 8000
 ```
 
-### 3단계 — 프론트엔드 실행
+### 4단계 — 프론트엔드 실행
 
 ```bash
 # coast-guard/ 루트 디렉토리에서
 python -m http.server 5173 --directory frontend
 ```
 
-### 4단계 — 접속
+### 5단계 — 접속
 
 | 주소 | 내용 |
 |------|------|
@@ -76,19 +83,15 @@ python -m http.server 5173 --directory frontend
 
 | 데이터 | 규모 | 파일 위치 | 상태 |
 |--------|------|----------|------|
-| 전북 CCTV 위치 (행안부) | 8,284개 | `data/cctv_jeonbuk.csv` | ✅ |
-| 기상 관측 군산 2023~2025 | 26,304행 | `data/weather_gunsan_*.csv` | ✅ |
+| 전북 CCTV 위치 (행안부) | **13,865개** | `data/cctv_jeonbuk.csv` → `processed/cctv_grid_counts.csv` | ✅ |
+| 기상 관측 군산 2023~2025 | 26,304행 | `data/weather_gunsan_*.csv` → `processed/weather_hourly.csv` | ✅ |
 | KHOA 조위 관측 (군산항) | 25,656행 | `data/군산_*.txt` → `processed/tide_hourly.csv` | ✅ |
 | SGIS 인구격자 (500m) | 8,575격자 | `data/sgis/` → `processed/population_grid.csv` | ✅ |
-| 일별 위험 점수 | 918일 | `data/processed/daily_risk.csv` | ✅ |
-| 월별 계절 통계 | 12개월 | `data/processed/seasonal_stats.csv` | ✅ |
-
-### 연동 예정 (Phase 1 잔여)
-
-| 데이터 | 출처 | 용도 |
-|--------|------|------|
-| 격자별 CCTV 수 매핑 | `cctv_jeonbuk.csv` | CVI 변수 (감시 커버리지) |
-| 실 CVI 재산출 | 위 모든 실 데이터 | SHAP 가중치 적용 |
+| MDIS 어선현황 (2020) | 940척 | `data/2020_해수면-어선현황_*.csv` → `processed/vessel_summary.csv` | ✅ |
+| 일별 위험 점수 | 918일 | `processed/daily_risk.csv` | ✅ |
+| 월별 계절 통계 | 12개월 | `processed/seasonal_stats.csv` | ✅ |
+| STL 야간 이상지수 (월별) | 12행 | `processed/night_anomaly_monthly.csv` | ✅ |
+| STL 야간 이상지수 (일별) | 918행 | `processed/night_anomaly_daily.csv` | ✅ |
 
 ---
 
@@ -96,31 +99,57 @@ python -m http.server 5173 --directory frontend
 
 ```
 coast-guard/
+├── api/
+│   ├── index.py              ← Vercel Serverless 진입점 (FastAPI ASGI 래퍼)
+│   └── requirements.txt      ← Vercel 전용 패키지 목록
 ├── backend/
-│   ├── main.py               ← FastAPI 앱 (5개 라우터 등록)
+│   ├── main.py               ← FastAPI 앱 (6개 라우터 등록)
 │   ├── routers/
-│   │   ├── grids.py          ← 격자 목록/상세/시계열/핫스팟
+│   │   ├── grids.py          ← 격자 목록/상세/시계열/핫스팟/예측
 │   │   ├── alerts.py         ← 오늘 경보 / 7일 예측
 │   │   ├── environment.py    ← 현재 환경 (기상+조위)
 │   │   ├── assets.py         ← 감시 자산 목록/수정
-│   │   └── calendar.py       ← 위험 캘린더 4개 엔드포인트
+│   │   ├── calendar.py       ← 위험 캘린더 (range/day/forecast/stats)
+│   │   └── cron.py           ← Vercel Cron Job 캐시 갱신
 │   ├── services/
-│   │   ├── data_pipeline.py  ← 조위·기상·인구 전처리 (1회성)
-│   │   └── risk_calendar.py  ← 실측 조회 + 미래 예측
+│   │   ├── cvi_calculator.py    ← SHAP 가중치 기반 실 CVI 산출
+│   │   ├── cctv_loader.py       ← CCTV 격자 매핑 (processed CSV 우선)
+│   │   ├── vessel_loader.py     ← MDIS 어선 밀도
+│   │   ├── population_loader.py ← SGIS 인구밀도
+│   │   ├── stl_service.py       ← STL 분해 결과 서비스 (night_anomaly)
+│   │   ├── weather_api.py       ← 기상청 ASOS 실측 API (군산 140)
+│   │   ├── environment_service.py ← 현재 환경 (ASOS 실측 + 조석수식)
+│   │   ├── risk_calendar.py     ← 위험 캘린더 (실측 조회 + 미래 예측)
+│   │   └── data_pipeline.py     ← 조위·기상·인구 전처리 (1회성 실행)
+│   ├── scripts/
+│   │   ├── collect_cctv.py      ← data.go.kr CCTV 수집 스크립트
+│   │   ├── preprocess_assets.py ← Vercel용 processed CSV 생성
+│   │   └── run_stl.py           ← STL 분해 실행 (statsmodels)
 │   └── data/
-│       ├── dummy_grids.py    ← 격자 더미 (Phase 1 잔여)
-│       ├── dummy_environment.py ← 환경 더미 (Phase 1 잔여)
-│       ├── assets.json       ← 자산 위치 (런타임 편집)
-│       └── processed/        ← 전처리 결과 CSV (git 제외)
+│       ├── dummy_grids.py       ← 격자 더미 (import 오류 시 fallback)
+│       ├── dummy_environment.py ← 환경 더미 (import 오류 시 fallback)
+│       ├── assets.json          ← 자산 위치 (런타임 편집, 읽기 전용)
+│       └── processed/           ← 전처리 결과 CSV (git 포함, Vercel 접근)
+│           ├── tide_hourly.csv
+│           ├── weather_hourly.csv
+│           ├── population_grid.csv
+│           ├── cctv_grid_counts.csv
+│           ├── vessel_summary.csv
+│           ├── daily_risk.csv
+│           ├── seasonal_stats.csv
+│           ├── night_anomaly_monthly.csv
+│           └── night_anomaly_daily.csv
 ├── frontend/
 │   ├── index.html            ← 단일 HTML (5탭 레이아웃)
 │   ├── style.css             ← 군용 다크모드 스타일
 │   └── app.js                ← 전체 프론트엔드 로직
-└── data/                     ← 원본 수집 파일 (git 제외)
-    ├── cctv_jeonbuk.csv
-    ├── weather_gunsan_*.csv
-    ├── 군산_*.txt             ← KHOA 조위 월별 TXT
-    └── sgis/                 ← SGIS SHP + CSV
+├── data/                     ← 원본 수집 파일 (git 제외)
+│   ├── cctv_jeonbuk.csv
+│   ├── weather_gunsan_*.csv
+│   ├── 군산_*.txt            ← KHOA 조위 월별 TXT
+│   ├── sgis/                 ← SGIS SHP + CSV
+│   └── 2020_해수면-어선현황_*.csv
+└── vercel.json               ← Vercel 배포 설정 (Cron Job 포함)
 ```
 
 ---
@@ -128,19 +157,23 @@ coast-guard/
 ## 주요 API
 
 ```
-GET /api/grids                  전체 격자 목록 (필터: region, lisa, cvi)
-GET /api/grids/summary          통계 요약
-GET /api/grids/{id}             격자 상세 + SHAP 기여도
-GET /api/grids/{id}/timeseries  야간 이상 지수 시계열
-GET /api/alert/today            오늘 3중 취약 경보 상태
-GET /api/alert/forecast         7일 예측 캘린더
-GET /api/environment/current    현재 기상 + 조위
-GET /api/assets                 감시 자산 목록
-PUT /api/assets/{id}            자산 위치·상태 수정
-GET /api/calendar/range         기간별 일별 위험 점수 (최대 1500일)
-GET /api/calendar/day/{date}    특정일 시간별 24행 상세
-GET /api/calendar/forecast      미래 N일 예측 (최대 90일)
-GET /api/calendar/stats         전체 통계 요약
+GET  /api/grids                           전체 격자 목록 (필터: region, lisa, cvi)
+GET  /api/grids/summary                   통계 요약
+GET  /api/grids/top                       CVI 상위 N개
+GET  /api/grids/hotspots                  HH 핫스팟 목록
+GET  /api/grids/forecast?date=YYYY-MM-DD  격자별 예측 CVI (최대 90일)
+GET  /api/grids/{id}                      격자 상세 + SHAP 기여도
+GET  /api/grids/{id}/timeseries           야간 이상 지수 시계열 (STL 실측, 최대 918일)
+GET  /api/alert/today                     오늘 3중 취약 경보 상태
+GET  /api/alert/forecast                  7일 예측 (내일~D+7)
+GET  /api/environment/current             현재 기상(ASOS 실측) + 조위(조석수식)
+GET  /api/assets                          감시 자산 목록
+PUT  /api/assets/{id}                     자산 수정 (Vercel 환경: 읽기 전용, 503 반환)
+GET  /api/calendar/range                  기간별 일별 위험 점수 (최대 1500일)
+GET  /api/calendar/day/{date}             특정일 시간별 24행 상세
+GET  /api/calendar/forecast               미래 N일 예측 (최대 90일)
+GET  /api/calendar/stats                  전체 통계 요약
+GET  /api/cron/refresh                    캐시 갱신 (CRON_SECRET Bearer 토큰 필수)
 ```
 
 ---
@@ -150,9 +183,18 @@ GET /api/calendar/stats         전체 통계 요약
 | 단계 | 내용 | 상태 |
 |------|------|------|
 | Phase 0 | 프로토타입 — 더미 데이터 기반 전체 UI | ✅ 완료 |
-| Phase 1 | 실 데이터 연동 — KHOA·ASOS·SGIS 전처리 + 위험 캘린더 | 🔄 65% 진행 |
-| Phase 2 | 자동화 — 1시간 주기 갱신, 리포트 PDF | 🔲 예정 |
+| Phase 1 | Vercel 배포 + 5개 SHAP 인자 전부 실 데이터 연동 | ✅ 완료 |
+| Phase 2 | STL 이상탐지·기상청 ASOS API·Cron Job·90일 예측·예측 CVI 모드 | ✅ 완료 |
 | Phase 3 | 전국 확장 — 충남 → 전국 2,600격자 | 🔲 예정 |
+
+---
+
+## 환경변수
+
+| 변수 | 설명 | 등록 위치 |
+|------|------|----------|
+| `DATA_GO_KR_KEY` | data.go.kr API 인증키 (기상청 ASOS, CCTV 수집) | `.env` / Vercel 환경변수 |
+| `CRON_SECRET` | Cron Job 엔드포인트 Bearer 토큰 | Vercel 환경변수 |
 
 ---
 
